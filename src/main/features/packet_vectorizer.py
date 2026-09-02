@@ -15,6 +15,8 @@ def entropy(b):
 
 def to_vector(p):
     global last_seen
+    if IP not in p:
+        raise ValueError("to_vector() requires a packet with an IP layer")
     ip = p[IP]
     ts = p.time
     vec = np.zeros(12)

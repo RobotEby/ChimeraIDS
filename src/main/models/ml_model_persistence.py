@@ -1,6 +1,6 @@
-import joblib
 import signal
 
+import joblib
 from models.ml_model_config import MODEL
 
 

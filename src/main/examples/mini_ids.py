@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-from scapy.all import sniff, IP, TCP, UDP
-from collections import defaultdict, deque
-import time
 import statistics
+import time
+from collections import defaultdict, deque
+
+from scapy.all import IP, TCP, UDP, sniff
 
 WINDOW = 60
 # deviations to consider anomalous
@@ -76,5 +77,10 @@ def processa(p):
             alerta("SYN-Flood", ip)
 
 
-print("Capturando... Ctrl-C para parar.")
-sniff(prn=processa, store=False, filter="ip")
+def main():
+    print("Capturando... Ctrl-C para parar.")
+    sniff(prn=processa, store=False, filter="ip")
+
+
+if __name__ == "__main__":
+    main()
