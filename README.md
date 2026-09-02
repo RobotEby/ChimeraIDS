@@ -1,8 +1,9 @@
-# IntrusionDetectionSystemIDS
+# ChimeraIDS
 
 ![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Status](https://img.shields.io/badge/status-Experimental-orange.svg)
+![Tests](https://img.shields.io/badge/tests-35%20passing-brightgreen.svg)
 
 An advanced, modular Intrusion Detection System (IDS) that monitors network traffic and detects anomalous behavior or patterns indicating potential attacks (e.g., DDoS, Port Scans, SYN Floods).
 
@@ -47,12 +48,13 @@ This system is built with a strong emphasis on modularity, scalability, and clea
 The codebase follows a strict `src/` layout, using absolute imports and separating data extraction from detection logic.
 
 ```text
-IntrusionDetectionSystemIDS/
+ChimeraIDS/
 ├── src/
 │ └── main/
 │ ├── base/
 │ │ ├── __init__.py
-│ │ └── baseline_dynamic_store.py
+│ │ ├── baseline_dynamic_store.py
+│ │ └── config.py
 │ ├── data/
 │ │ ├── __init__.py
 │ │ └── packet_capture.py
@@ -79,7 +81,20 @@ IntrusionDetectionSystemIDS/
 │ │ └── traffic_window_aggregator.py
 │ ├── __init__.py
 │ └── requirements.txt
+├── tests/
+│ ├── conftest.py
+│ ├── test_alert_logger.py
+│ ├── test_baseline_dynamic_store.py
+│ ├── test_config.py
+│ ├── test_ml_model_config.py
+│ ├── test_packet_vectorizer.py
+│ ├── test_rules_detection_engine.py
+│ └── test_window_aggregator.py
+├── .github/
+│ └── workflows/
+│   └── ci.yml
 ├── .gitignore
+├── pyproject.toml
 ├── LICENSE
 └── README.md
 ```
@@ -88,13 +103,21 @@ IntrusionDetectionSystemIDS/
 
 ### 1. Rule-Based IDS
 
-Builds a **dynamic baseline** during a warm-up period and flags anomalies based on statistical deviation.
+Builds a **dynamic baseline** during a warm-up period (a minimum number of
+samples must be observed before any statistical check is trusted — see
+"Fixes Applied During Audit" below) and flags anomalies based on deviation
+from that baseline.
 
-| Attack Type   | Detection Logic               | Base Metrics Monitored                           |
-| ------------- | ----------------------------- | ------------------------------------------------ |
-| **DDoS**      | `PPS > μ + 3σ`                | Packets per second (PPS), Bytes per second (BPS) |
-| **Port Scan** | `Unique ports > μ + 3σ`       | Unique destination ports per source IP           |
-| **SYN Flood** | Excessive `SYN` without `ACK` | TCP flag behavior                                |
+| Attack Type   | Detection Logic                                 | Base Metrics Monitored                           |
+| ------------- | ------------------------------------------------ | ------------------------------------------------ |
+| **DDoS**      | `PPS > μ + 3σ` (statistical)                     | Packets per second (PPS), Bytes per second (BPS) |
+| **Port Scan** | `Unique ports (60s window) > fixed threshold`    | Unique destination ports per source IP           |
+| **SYN Flood** | Excessive `SYN` without `ACK` (fixed threshold)  | TCP flag behavior                                |
+
+Port scan detection uses a fixed threshold rather than a statistical
+mean/stdev comparison — see "Fixes Applied During Audit" for why. All
+thresholds are configurable via environment variables; see
+`src/main/base/config.py`.
 
 > 📍 _Implementation details found in:_ `main/rules/rules_detection_engine.py`
 
@@ -174,7 +197,7 @@ sudo python src/main/examples/mini_ids.py
 sudo python src/main/rules/ml_detection_engine.py
 ```
 
-_The system will automatically collect packets, train the model, begin detection, and write alerts to `main/logs/alert_logger.py`._
+_The system will automatically collect packets, train the model, begin detection, and write alerts to `alerts.log` / `ml_alerts.log` (via `main/logs/alert_logger.py`), as well as printing them to the console._
 
 ---
 
@@ -201,6 +224,91 @@ nmap -sS <network-range>
 ```
 
 ---
+
+## Configuration
+
+All detection thresholds and window sizes live in `src/main/base/config.py`
+and can be overridden with environment variables without editing source
+code:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `CHIMERA_DDOS_DESVIOS` | `3.0` | Standard deviations above the PPS baseline before a DDoS alert fires |
+| `CHIMERA_SYN_FLOOD_LIMITE` | `100` | Consecutive SYNs (no ACK) from one IP before a SYN-flood alert fires |
+| `CHIMERA_PORT_SCAN_LIMIAR` | `15` | Unique destination ports from one IP, within the baseline window, before a port-scan alert fires |
+| `CHIMERA_MIN_AMOSTRAS_BASELINE` | `10` | Minimum samples required before the statistical DDoS check is trusted |
+| `CHIMERA_JANELA_BASELINE_SEGUNDOS` | `60` | Sliding window size (seconds) for the rule-based baseline |
+| `CHIMERA_JANELA_AGREGACAO_SEGUNDOS` | `5` | Window size (seconds) for temporal flow aggregation |
+| `CHIMERA_HISTORICO_JANELAS` | `20` | How many past aggregation windows are kept per flow |
+| `CHIMERA_MIN_JANELAS_PARA_ALERTA` | `5` | Minimum windows observed before flow-anomaly alerts are trusted |
+| `CHIMERA_DESVIOS_PARA_ALERTA_FLUXO` | `3.0` | Standard deviations above a flow's own baseline before a flow-anomaly alert fires |
+| `CHIMERA_ML_N_ESTIMATORS` | `200` | Isolation Forest tree count |
+| `CHIMERA_ML_CONTAMINATION` | `0.02` | Isolation Forest expected outlier fraction |
+| `CHIMERA_ML_BUFFER_SIZE` | `10000` | Packets buffered before the ML model trains |
+| `CHIMERA_ML_THRESHOLD` | `0.7` | Anomaly score above which the ML engine alerts |
+| `CHIMERA_RULE_ALERT_LOG` | `alerts.log` | Path for rule-engine and flow-aggregator alerts |
+| `CHIMERA_ML_ALERT_LOG` | `ml_alerts.log` | Path for ML-engine alerts |
+| `CHIMERA_LOG_LEVEL` | `INFO` | Console log level |
+
+## Testing
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
+35 tests currently cover the shared baseline helpers, the rule-based engine
+(DDoS, port scan, and SYN-flood detection, including the two regression
+tests described below), the temporal flow aggregator, packet vectorization,
+the ML model configuration, the structured alert logger, and the config
+module's environment-variable overrides. All tests use synthetic, in-memory
+packets built with Scapy — none depend on real captured or offensive
+traffic, consistent with this project's defensive-only scope.
+
+Lint: `ruff check .`
+
+## Fixes Applied During Audit
+
+An earlier audit pass found that **none of the three detection engines this
+README describes could actually run**. Each failed with an `ImportError`
+the moment it was imported, because each imported a key name from *itself*
+rather than from where that name was actually supposed to come from:
+
+- `models/ml_model_config.py` imported `IForest` from itself, instead of
+  from `pyod.models.iforest`.
+- `rules/rules_detection_engine.py` imported `pps`, `bps`, `uniq`,
+  `syn_counter`, and the baseline mean/stdev variables from itself; none of
+  those names were defined anywhere in the codebase. The real baseline
+  logic only existed inside the standalone `examples/mini_ids.py` script
+  and had never been ported into the "modular" engine.
+- `windows/traffic_window_aggregator.py` imported `processa_vetor` from
+  itself; that function was never defined anywhere. This module (plus a
+  byte-for-byte duplicate file, `traffic-window-aggregator.py`, whose name
+  wasn't even a valid Python module name) was completely dead, orphaned
+  code — nothing else in the codebase called it.
+
+Once these were fixed and the engines could actually run for the first
+time, two further bugs surfaced immediately under test:
+
+1. The DDoS check false-positived on literally the first packet from any
+   source IP (an empty/1-sample baseline has mean=0, stdev=0, so
+   `1 > 0 + 3*0` is trivially true). Fixed with a minimum-sample warm-up
+   gate before the statistical check is trusted.
+2. The inherited port-scan formula (`mu = len(uniq) - 1`, fixed
+   `sigma = 2`) reduced to `len(uniq) > len(uniq) + 5`, which is false for
+   every possible value — this check could never fire, for any input, ever.
+   It also compared against an unbounded, never-time-trimmed set of
+   lifetime ports rather than recent behavior. Replaced with a fixed,
+   configurable threshold on unique ports within the trailing baseline
+   window (the same kind of approach already used for SYN-flood detection).
+
+`src/main/base/__init__.py` was also misnamed `_init_.py` (single
+underscores), which meant it wasn't recognized as a Python package
+initializer at all.
+
+All three engines, the temporal flow aggregator, and these two additional
+logic bugs now have regression tests (see "Testing" above) so they cannot
+silently regress.
 
 ## Model Persistence
 
@@ -245,5 +353,3 @@ This project is licensed under the [MIT License](LICENSE).
 ## Authors <a name = "authors"></a>
 
 - [@Kerlon Amaral](https://github.com/RobotEby) - Idea & Initial work
-
-See also the list of [contributors](https://github.com/RobotEby/TheDarkMark/contributors) who participated in this project.
