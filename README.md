@@ -110,7 +110,7 @@ from that baseline.
 
 | Attack Type   | Detection Logic                                 | Base Metrics Monitored                           |
 | ------------- | ------------------------------------------------ | ------------------------------------------------ |
-| **DDoS**      | `PPS > μ + 3σ` (statistical)                     | Packets per second (PPS), Bytes per second (BPS) |
+| **DDoS**      | `packets in current second > max(μ + 3σ, floor)` over per-second history (60s) | Packets per second (PPS), Bytes per second (BPS) |
 | **Port Scan** | `Unique ports (60s window) > fixed threshold`    | Unique destination ports per source IP           |
 | **SYN Flood** | Excessive `SYN` without `ACK` (fixed threshold)  | TCP flag behavior                                |
 
@@ -234,9 +234,10 @@ code:
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `CHIMERA_DDOS_DESVIOS` | `3.0` | Standard deviations above the PPS baseline before a DDoS alert fires |
+| `CHIMERA_DDOS_PPS_MINIMO` | `50` | Absolute packets-per-second floor below which no DDoS alert fires, however flat the baseline |
 | `CHIMERA_SYN_FLOOD_LIMITE` | `100` | Consecutive SYNs (no ACK) from one IP before a SYN-flood alert fires |
 | `CHIMERA_PORT_SCAN_LIMIAR` | `15` | Unique destination ports from one IP, within the baseline window, before a port-scan alert fires |
-| `CHIMERA_MIN_AMOSTRAS_BASELINE` | `10` | Minimum samples required before the statistical DDoS check is trusted |
+| `CHIMERA_MIN_AMOSTRAS_BASELINE` | `10` | Minimum complete seconds of history required before the statistical DDoS check is trusted |
 | `CHIMERA_JANELA_BASELINE_SEGUNDOS` | `60` | Sliding window size (seconds) for the rule-based baseline |
 | `CHIMERA_JANELA_AGREGACAO_SEGUNDOS` | `5` | Window size (seconds) for temporal flow aggregation |
 | `CHIMERA_HISTORICO_JANELAS` | `20` | How many past aggregation windows are kept per flow |
