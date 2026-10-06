@@ -31,6 +31,7 @@ DDOS_DESVIOS = _float_env("CHIMERA_DDOS_DESVIOS", 3.0)
 SYN_FLOOD_LIMITE = _int_env("CHIMERA_SYN_FLOOD_LIMITE", 100)
 PORT_SCAN_LIMIAR = _int_env("CHIMERA_PORT_SCAN_LIMIAR", 15)
 MIN_AMOSTRAS_BASELINE = _int_env("CHIMERA_MIN_AMOSTRAS_BASELINE", 10)
+DDOS_PPS_MINIMO = _int_env("CHIMERA_DDOS_PPS_MINIMO", 50)
 
 # --- Temporal flow aggregation (windows/traffic_window_aggregator.py) ------
 
