@@ -39,10 +39,11 @@ could actually run:
    detection below, and a well-established, real port-scan heuristic.
 """
 
+import statistics
 import time
 
 from base import config
-from base.baseline_dynamic_store import baseline, calc_stats, corta, syn_counter
+from base.baseline_dynamic_store import baseline, corta, ddos_ultimo_alerta, syn_counter
 from logs.alert_logger import alerta
 
 DDoS_DESVIOS = config.DDOS_DESVIOS
@@ -50,6 +51,50 @@ SYN_FLOOD_LIMITE = config.SYN_FLOOD_LIMITE
 PORT_SCAN_LIMIAR = config.PORT_SCAN_LIMIAR
 JANELA_SEGUNDOS = config.JANELA_BASELINE_SEGUNDOS
 MIN_AMOSTRAS_BASELINE = config.MIN_AMOSTRAS_BASELINE
+DDOS_PPS_MINIMO = config.DDOS_PPS_MINIMO
+
+
+def _ddos(ip, agora):
+    """Update the per-second packet buckets for `ip`; return True on a DDoS burst.
+
+    Earlier versions compared `len(pps)` with mean/stdev of a series whose
+    values were all 1 (mean=1, stdev=0), so any IP with >= MIN samples in the
+    window alerted. Here the series is packets-per-second: the current second
+    is compared against the *previous* complete seconds (zeros included for
+    silent seconds). Seconds already flagged are excluded from the baseline so
+    a sustained flood does not teach the baseline that it is normal. A
+    floor (`DDOS_PPS_MINIMO`) avoids alerting on tiny absolute rates when the
+    history is very flat.
+    """
+    sec = int(agora)
+    buckets = baseline["pps_buckets"][ip]
+    if buckets and buckets[-1][0] == sec:
+        buckets[-1][1] += 1
+    else:
+        buckets.append([sec, 1, False])
+    corta_buckets = sec - int(JANELA_SEGUNDOS)
+    while buckets and buckets[0][0] < corta_buckets:
+        buckets.popleft()
+
+    atual = buckets[-1]
+    inicio = max(buckets[0][0], corta_buckets)
+    por_segundo = {b[0]: b[1] for b in buckets if b[0] < sec and not b[2]}
+    flagged = {b[0] for b in buckets if b[0] < sec and b[2]}
+    historico = [por_segundo.get(s, 0) for s in range(inicio, sec) if s not in flagged]
+    if len(historico) < MIN_AMOSTRAS_BASELINE:
+        return False
+
+    mu = statistics.mean(historico)
+    sigma = statistics.stdev(historico) if len(historico) > 1 else 0.0
+    limite = max(mu + DDoS_DESVIOS * sigma, DDOS_PPS_MINIMO)
+    if atual[1] <= limite:
+        return False
+
+    atual[2] = True
+    if ddos_ultimo_alerta.get(ip) == sec:
+        return False
+    ddos_ultimo_alerta[ip] = sec
+    return True
 
 
 def detecta(f):
@@ -70,13 +115,10 @@ def detecta(f):
     corta(bps, agora - JANELA_SEGUNDOS)
     corta(uniq, agora - JANELA_SEGUNDOS)
 
-    # DDoS test: current packets-per-window vs. the running mean/stdev of
-    # the per-packet contributions in that same window. Skipped until there
-    # is a minimally meaningful baseline (see module docstring, point 1).
-    if len(pps) >= MIN_AMOSTRAS_BASELINE:
-        mu_pps, sigma_pps = calc_stats(pps)
-        if len(pps) > mu_pps + DDoS_DESVIOS * sigma_pps:
-            alerta("DDoS", ip)
+    # DDoS test: packets in the current 1-second bucket vs. mean + k*stdev
+    # of the packets-per-second history of the same source IP.
+    if _ddos(ip, agora):
+        alerta("DDoS", ip)
 
     # Port scan test: a fixed threshold on distinct destination ports
     # contacted within the trailing window (see module docstring, point 2,
