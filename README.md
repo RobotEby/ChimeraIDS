@@ -3,7 +3,7 @@
 ![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Status](https://img.shields.io/badge/status-Experimental-orange.svg)
-![Tests](https://img.shields.io/badge/tests-35%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)
 
 An advanced, modular Intrusion Detection System (IDS) that monitors network traffic and detects anomalous behavior or patterns indicating potential attacks (e.g., DDoS, Port Scans, SYN Floods).
 
@@ -50,7 +50,7 @@ The codebase follows a strict `src/` layout, using absolute imports and separati
 ```text
 ChimeraIDS/
 ├── src/
-│ └── main/
+│ └── chimera_ids/
 │ ├── base/
 │ │ ├── __init__.py
 │ │ ├── baseline_dynamic_store.py
@@ -79,14 +79,17 @@ ChimeraIDS/
 │ ├── windows/
 │ │ ├── __init__.py
 │ │ └── traffic_window_aggregator.py
-│ ├── __init__.py
-│ └── requirements.txt
+│ └── __init__.py
+├── requirements.txt
 ├── tests/
 │ ├── conftest.py
 │ ├── test_alert_logger.py
 │ ├── test_baseline_dynamic_store.py
 │ ├── test_config.py
+│ ├── test_ml_detection_engine.py
 │ ├── test_ml_model_config.py
+│ ├── test_ml_model_persistence.py
+│ ├── test_packet_feature_extractor.py
 │ ├── test_packet_vectorizer.py
 │ ├── test_rules_detection_engine.py
 │ └── test_window_aggregator.py
@@ -117,9 +120,9 @@ from that baseline.
 Port scan detection uses a fixed threshold rather than a statistical
 mean/stdev comparison — see "Fixes Applied During Audit" for why. All
 thresholds are configurable via environment variables; see
-`src/main/base/config.py`.
+`src/chimera_ids/base/config.py`.
 
-> 📍 _Implementation details found in:_ `main/rules/rules_detection_engine.py`
+> 📍 _Implementation details found in:_ `chimera_ids/rules/rules_detection_engine.py`
 
 ### 2. Machine Learning IDS
 
@@ -127,7 +130,7 @@ Instead of hardcoded thresholds, the ML engine uses an **Isolation Forest** mode
 
 **Vectorization Process:** Each packet is transformed into a 12-dimensional numeric vector including: _Packet length, Protocol number, Source/Destination ports, TCP flags, Window size, TTL, Fragment ID, Payload length, Inter-arrival time, Payload entropy, and Same-source frequency._
 
-> 📍 _Feature extraction:_ `main/features/packet_vectorizer.py` 📍 _Detection engine:_ `main/rules/ml_detection_engine.py`
+> 📍 _Feature extraction:_ `chimera_ids/features/packet_vectorizer.py` 📍 _Detection engine:_ `chimera_ids/rules/ml_detection_engine.py`
 
 ### 3. Temporal Flow Aggregation (5s Windows)
 
@@ -139,7 +142,7 @@ Groups packets into 5-second flow windows based on `(proto, src_ip, dst_ip, dst_
 
 - Low-rate intrusion attempts
 
-> 📍 _Implementation details found in:_ `main/windows/traffic_window_aggregator.py`
+> 📍 _Implementation details found in:_ `chimera_ids/windows/traffic_window_aggregator.py`
 
 ---
 
@@ -176,7 +179,8 @@ source .venv/bin/activate
 3.**Install dependencies:**
 
 ```Bash
-pip install -r src/main/requirements.txt
+pip install -r requirements.txt
+pip install -e .   # makes `chimera_ids` importable
 ```
 
 _Main packages: `scapy`, `numpy`, `pyod`, `scikit-learn`, `joblib`_
@@ -188,16 +192,16 @@ _Note: You may need to run these scripts with `sudo` or administrator privileges
 **Run Rule-Based Example:**
 
 ```Bash
-sudo python src/main/examples/mini_ids.py
+sudo python -m chimera_ids.examples.mini_ids
 ```
 
 **Run ML-Based Detection:**
 
 ```Bash
-sudo python src/main/rules/ml_detection_engine.py
+sudo python -m chimera_ids.rules.ml_detection_engine
 ```
 
-_The system will automatically collect packets, train the model, begin detection, and write alerts to `alerts.log` / `ml_alerts.log` (via `main/logs/alert_logger.py`), as well as printing them to the console._
+_The system will automatically collect packets, train the model, begin detection, and write alerts to `alerts.log` / `ml_alerts.log` (via `chimera_ids/logs/alert_logger.py`), as well as printing them to the console._
 
 ---
 
@@ -227,7 +231,7 @@ nmap -sS <network-range>
 
 ## Configuration
 
-All detection thresholds and window sizes live in `src/main/base/config.py`
+All detection thresholds and window sizes live in `src/chimera_ids/base/config.py`
 and can be overridden with environment variables without editing source
 code:
 
@@ -258,10 +262,12 @@ pip install -e ".[dev]"
 pytest
 ```
 
-35 tests currently cover the shared baseline helpers, the rule-based engine
-(DDoS, port scan, and SYN-flood detection, including the two regression
-tests described below), the temporal flow aggregator, packet vectorization,
-the ML model configuration, the structured alert logger, and the config
+The suite covers the shared baseline helpers, the rule-based engine
+(DDoS, port scan, and SYN-flood detection, including the regression
+tests described below), the temporal flow aggregator, packet feature
+extraction and vectorization, the ML engine (training trigger, scoring and
+alerting, plus an end-to-end run with the real Isolation Forest), model
+saving/loading, the structured alert logger, and the config
 module's environment-variable overrides. All tests use synthetic, in-memory
 packets built with Scapy — none depend on real captured or offensive
 traffic, consistent with this project's defensive-only scope.
@@ -303,7 +309,7 @@ time, two further bugs surfaced immediately under test:
    configurable threshold on unique ports within the trailing baseline
    window (the same kind of approach already used for SYN-flood detection).
 
-`src/main/base/__init__.py` was also misnamed `_init_.py` (single
+`src/chimera_ids/base/__init__.py` was also misnamed `_init_.py` (single
 underscores), which meant it wasn't recognized as a Python package
 initializer at all.
 
@@ -311,9 +317,34 @@ All three engines, the temporal flow aggregator, and these two additional
 logic bugs now have regression tests (see "Testing" above) so they cannot
 silently regress.
 
+## Later Changes
+
+- **Package namespace.** Everything now lives under a single `chimera_ids`
+  package (`from chimera_ids.rules import rules_detection_engine`). Before,
+  `pip install` placed generic top-level packages (`base`, `data`, `logs`,
+  `models`, `rules`, `windows`, ...) in `site-packages`, where they could
+  collide with unrelated libraries. Code importing the old names must be
+  updated (version bumped to 0.3.0 for this reason). Entry points are now
+  `python -m chimera_ids.examples.mini_ids` and
+  `python -m chimera_ids.rules.ml_detection_engine`.
+- **DDoS detection** compares packets in the current second against the
+  per-second history of the same source (see `CHIMERA_DDOS_PPS_MINIMO`)
+  instead of a series whose values were all 1.
+- **Payload entropy** (`features/packet_vectorizer.py`) divided the byte
+  frequencies of the first 64 bytes by the *full* payload length, understating
+  the entropy of any payload longer than 64 bytes (e.g. 64 distinct bytes
+  repeated four times gave 2.0 instead of 6.0). This changes the model's
+  input, so models trained before this fix should be retrained.
+- **ML training** requires `min(1000, buffer size)` samples; a
+  `CHIMERA_ML_BUFFER_SIZE` below 1000 used to make training impossible.
+- **Model persistence** no longer registers a signal handler as an import
+  side effect (nothing imported it, so the documented `SIGUSR1` save never
+  worked, and it would fail on Windows). The handler is installed by the ML
+  engine's `main()` where the platform supports it.
+
 ## Model Persistence
 
-The ML architecture supports continuous learning. Models can be saved and reloaded via `main/models/ml_model_persistence.py`. This ensures:
+The ML architecture supports continuous learning. Models can be saved and reloaded via `chimera_ids/models/ml_model_persistence.py` (`salva` / `carrega`). While `ml_detection_engine` is running, `kill -USR1 <pid>` saves the model to `ids_model.pkl` (POSIX only; the handler is skipped on Windows). This ensures:
 
 - Model reuse after system restarts.
 
