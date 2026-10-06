@@ -20,7 +20,6 @@ from chimera_ids.logs.alert_logger import alerta
 from chimera_ids.models.ml_model_config import BUFFER, MODEL, THRESH, TREINADO
 from chimera_ids.models.ml_model_persistence import instala_handler_de_salvamento
 
-
 # Samples needed before fitting. Capped by the buffer size so that a small
 # CHIMERA_ML_BUFFER_SIZE (< 1000) cannot leave the model permanently untrained.
 MIN_AMOSTRAS_TREINO = min(1000, BUFFER.maxlen)

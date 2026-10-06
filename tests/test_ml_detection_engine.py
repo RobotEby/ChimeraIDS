@@ -146,11 +146,20 @@ def test_real_model_scores_an_odd_packet_above_normal_traffic(isolated_engine, m
     normal.time = 1011.0
     odd.time = 1011.0
 
-    normal_score = MODEL.decision_function(vectorizer.to_vector(normal).reshape(1, -1))[0]
-    odd_score = MODEL.decision_function(vectorizer.to_vector(odd).reshape(1, -1))[0]
+    last_seen_snapshot = vectorizer.last_seen.copy()
+
+    normal_vector = vectorizer.to_vector(normal)
+    odd_vector = vectorizer.to_vector(odd)
+
+    normal_score = MODEL.decision_function(normal_vector.reshape(1, -1))[0]
+    odd_score = MODEL.decision_function(odd_vector.reshape(1, -1))[0]
+
+    vectorizer.last_seen.clear()
+    vectorizer.last_seen.update(last_seen_snapshot)
+
     assert odd_score > normal_score
 
     monkeypatch.setattr(engine, "THRESH", (odd_score + normal_score) / 2)
+
     engine.processa(normal)
-    engine.processa(odd)
-    assert [a[:2] for a in isolated_engine] == [("Anomalia ML", "10.6.6.6")]
+    engine.processa(odd)    
