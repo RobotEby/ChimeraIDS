@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chimera-ids"
-version = "0.2.0"
+version = "0.3.0"
 description = "Modular, defensive intrusion detection system combining rule-based statistical baselines, an Isolation Forest anomaly model, and temporal flow aggregation."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -18,10 +18,11 @@ dependencies = [
 ]
 
 [tool.setuptools]
-package-dir = {"" = "src/main"}
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
-where = ["src/main"]
+where = ["src"]
+include = ["chimera_ids*"]
 
 [project.optional-dependencies]
 dev = [
@@ -31,9 +32,11 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 100
+src = ["src", "tests"]
 target-version = "py38"
 
 [tool.ruff.lint]
