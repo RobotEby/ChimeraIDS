@@ -1,6 +1,6 @@
 from collections import deque
 
-from base.baseline_dynamic_store import calc_stats, corta
+from chimera_ids.base.baseline_dynamic_store import calc_stats, corta
 
 
 def test_corta_removes_entries_older_than_cutoff():

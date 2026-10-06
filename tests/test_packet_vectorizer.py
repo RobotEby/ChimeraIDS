@@ -1,6 +1,7 @@
-import features.packet_vectorizer as vectorizer
 import pytest
 from scapy.all import IP, TCP, UDP, Raw
+
+import chimera_ids.features.packet_vectorizer as vectorizer
 
 
 def test_entropy_of_empty_bytes_is_zero():
@@ -14,6 +15,16 @@ def test_entropy_of_repeated_byte_is_zero():
 
 def test_entropy_of_varied_bytes_is_positive():
     assert vectorizer.entropy(bytes(range(64))) > 0.0
+
+
+def test_entropy_of_64_distinct_bytes_is_six_bits():
+    assert vectorizer.entropy(bytes(range(64))) == pytest.approx(6.0)
+
+
+def test_entropy_only_depends_on_the_first_64_bytes():
+    """Regression: probabilities were divided by the full length, not the 64-byte sample."""
+    payload = bytes(range(64))
+    assert vectorizer.entropy(payload * 4) == pytest.approx(vectorizer.entropy(payload))
 
 
 def test_to_vector_returns_12_dimensional_array():
@@ -58,3 +69,29 @@ def test_to_vector_raises_a_clear_error_for_a_non_ip_packet():
 
     with pytest.raises(ValueError, match="IP layer"):
         vectorizer.to_vector(Ether())
+
+
+def test_to_vector_measures_the_gap_since_the_previous_packet_from_the_same_source():
+    vectorizer.last_seen.clear()
+    first = IP(src="10.0.0.1", dst="10.0.0.2") / TCP(sport=1, dport=2)
+    second = IP(src="10.0.0.1", dst="10.0.0.2") / TCP(sport=1, dport=2)
+    first.time = 100.0
+    second.time = 100.5
+
+    assert vectorizer.to_vector(first)[9] == 0.0  # first sighting
+    assert vectorizer.to_vector(second)[9] == pytest.approx(500_000.0)  # microseconds
+
+
+def test_to_vector_counts_sources_seen_in_the_last_five_seconds():
+    vectorizer.last_seen.clear()
+    sightings = [("10.0.0.1", 100.0), ("10.0.0.2", 101.0), ("10.0.0.3", 90.0)]
+    for index, (src, ts) in enumerate(sightings):
+        pkt = IP(src=src, dst="10.9.9.9") / TCP(sport=index + 1, dport=2)
+        pkt.time = ts
+        vectorizer.to_vector(pkt)
+
+    probe = IP(src="10.0.0.4", dst="10.9.9.9") / TCP(sport=9, dport=2)
+    probe.time = 103.0
+
+    # 10.0.0.1 and 10.0.0.2 are within 5s of 103.0; 10.0.0.3 (at 90.0) is not
+    assert vectorizer.to_vector(probe)[11] == 2

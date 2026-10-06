@@ -1,6 +1,7 @@
 import pytest
-import rules.rules_detection_engine as engine
-from base.baseline_dynamic_store import baseline, ddos_ultimo_alerta, syn_counter
+
+import chimera_ids.rules.rules_detection_engine as engine
+from chimera_ids.base.baseline_dynamic_store import baseline, ddos_ultimo_alerta, syn_counter
 
 
 @pytest.fixture(autouse=True)
