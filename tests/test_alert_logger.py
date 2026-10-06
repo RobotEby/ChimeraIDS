@@ -1,5 +1,5 @@
-from base import config
-from logs.alert_logger import alerta
+from chimera_ids.base import config
+from chimera_ids.logs.alert_logger import alerta
 
 
 def test_alerta_writes_a_line_to_the_configured_log_path(tmp_path, monkeypatch):

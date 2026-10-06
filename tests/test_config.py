@@ -1,6 +1,6 @@
 import importlib
 
-from base import config
+from chimera_ids.base import config
 
 
 def test_defaults_match_original_hardcoded_values():

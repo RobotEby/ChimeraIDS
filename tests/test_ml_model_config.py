@@ -10,7 +10,7 @@ def test_ml_model_config_imports_without_error():
     `from models.ml_model_config import IForest` (importing from itself),
     which raised an ImportError the moment anything tried to import it.
     """
-    module = importlib.import_module("models.ml_model_config")
+    module = importlib.import_module("chimera_ids.models.ml_model_config")
     assert isinstance(module.MODEL, IForest)
     assert module.BUFFER.maxlen == 10000
     assert module.TREINADO is False
@@ -22,13 +22,13 @@ def test_ml_detection_engine_imports_without_starting_capture():
     Regression test: `sniff()` used to run at module level, so importing
     this module for testing would immediately start live packet capture.
     """
-    module = importlib.import_module("rules.ml_detection_engine")
+    module = importlib.import_module("chimera_ids.rules.ml_detection_engine")
     assert callable(module.processa)
     assert callable(module.treina)
 
 
 def test_treina_fits_the_model_once_enough_samples_are_buffered(monkeypatch):
-    module = importlib.import_module("rules.ml_detection_engine")
+    module = importlib.import_module("chimera_ids.rules.ml_detection_engine")
 
     # Reset shared module-level state so this test doesn't depend on
     # whatever earlier tests may have buffered.

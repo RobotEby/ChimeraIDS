@@ -1,6 +1,7 @@
 import pytest
-import windows.traffic_window_aggregator as aggregator
 from scapy.all import IP, TCP
+
+import chimera_ids.windows.traffic_window_aggregator as aggregator
 
 
 @pytest.fixture(autouse=True)

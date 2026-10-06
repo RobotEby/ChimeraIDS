@@ -1,0 +1,5 @@
+scapy
+numpy
+pyod
+scikit-learn
+joblib
