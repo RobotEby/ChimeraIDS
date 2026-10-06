@@ -37,7 +37,16 @@ baseline = {
     # made port-scan detection structurally unable to fire — see
     # rules/rules_detection_engine.py for details).
     "uniq": defaultdict(deque),
+    # packets per 1-second bucket, per source IP: deque of
+    # [second, count, flagged]. This is the series the DDoS check compares
+    # against; `pps` above holds one (timestamp, 1) entry per packet, whose
+    # values are all 1, so mean/stdev over it is meaningless.
+    "pps_buckets": defaultdict(deque),
 }
+
+# Last 1-second bucket for which a DDoS alert was raised, per source IP
+# (so a single burst raises one alert per second, not one per packet).
+ddos_ultimo_alerta = {}
 
 # Consecutive SYN-without-ACK counter, per source IP (reset on any ACK).
 syn_counter = defaultdict(int)
